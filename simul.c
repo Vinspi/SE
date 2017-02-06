@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <time.h>
 
 
 
@@ -24,6 +24,7 @@ typedef struct {
 ***********************************************************/
 int CC = 0;
 typedef int WORD;  /* un mot est un entier 32 bits  */
+char tampon = '\0';
 
 WORD mem[128];     /* memoire                       */
 
@@ -35,6 +36,8 @@ WORD mem[128];     /* memoire                       */
 #define SYSC_EXIT (0)
 #define SYSC_PUTI (1)
 #define SYSC_NEW_THREAD (2)
+#define SYSC_SLEEP (3)
+#define SYSC_GETCHAR (4)
 
 /**********************************************************
 ** Codes associes aux instructions
@@ -50,6 +53,7 @@ WORD mem[128];     /* memoire                       */
 #define INST_SYSC (7)
 #define INST_LOAD (8)
 #define INST_STORE (9)
+
 
 
 /**********************************************************
@@ -79,6 +83,8 @@ void make_inst(int adr, unsigned code, unsigned i, unsigned j, short arg) {
 #define INT_EXIT (6)
 #define INT_PUTI (7)
 #define INT_NEW_THREAD (8)
+#define INT_SLEEP (9)
+#define INT_GETCHAR (10)
 
 
 
@@ -100,11 +106,14 @@ typedef struct PSW {    /* Processor Status Word */
 #define MAX_PROCESS  (20)   /* nb maximum de processus  */
 #define EMPTY         (0)   /* processus non-pret       */
 #define READY         (1)   /* processus pret           */
+#define SLEEPING (2) /* processus endormi */
+#define GETCHAR (3)
 
 
 struct {
 	PSW  cpu;               /* mot d’etat du processeur */
-	int  state;             /* etat du processus        */
+	int  state;    					/* etat du processus        */
+	int dateReveil;
 } process[MAX_PROCESS];   /* table des processus      */
 
 int current_process = 0;   /* nu du processus courant  */
@@ -168,6 +177,12 @@ PSW cpu_SYSC(PSW m){
 			break;
 		case SYSC_NEW_THREAD:
 			m.IN = INT_NEW_THREAD;
+			break;
+		case SYSC_SLEEP:
+			m.IN = INT_SLEEP;
+			break;
+		case SYSC_GETCHAR:
+			m.IN = INT_GETCHAR;
 			break;
 	}
 	m.PC++;
@@ -286,21 +301,30 @@ PSW systeme_init(void) {
 	//make_inst(2, INST_ADD, 0, 2, 200);   /* R0 += R2+200 */
 	//make_inst(3, INST_ADD, 0, 1, 100);   /* R0 += R1+100 */
 
-
+	/*
 	make_inst(0,INST_SUB,1,1,0);
 	make_inst(1,INST_SUB,3,3,-1);
 	make_inst(2,INST_SUB,2,2,-10);
 	make_inst(3,INST_SYSC,1,1,SYSC_NEW_THREAD);
 	make_inst(4,INST_IFGT,0,0,10);
-	make_inst(5,INST_ADD,1,3,0); /* code du fils */
+	make_inst(5,INST_ADD,1,3,0);  code du fils
 	make_inst(6,INST_STORE,1,0,1);
 	make_inst(7,INST_CMP,2,1,0);
 	make_inst(8,INST_IFGT,1,2,5);
 	make_inst(9,INST_HALT,1,1,0);
 
 	make_inst(10,INST_LOAD,1,0,1);
-	make_inst(11,INST_SYSC,1,2,SYSC_PUTI); /* code du pere */
+	make_inst(11,INST_SYSC,1,2,SYSC_PUTI);  code du pere
 	make_inst(12,INST_JUMP,1,1,10);
+
+	*/
+
+	make_inst(0,INST_SUB,1,1,0);
+	make_inst(1,INST_SUB,2,2,-1);
+	make_inst(2,INST_SYSC,1,1,SYSC_GETCHAR);
+	make_inst(3,INST_SYSC,1,1,SYSC_PUTI);
+	make_inst(4,INST_SYSC,2,1,SYSC_SLEEP);
+	make_inst(5,INST_JUMP,1,1,2);
 
 
 
@@ -328,11 +352,19 @@ void afficher_1er_RI(PSW m){
 	printf("R[%d] = %d\n",m.RI.i, m.DR[m.RI.i]);
 }
 
+
 PSW switchProcess(PSW m){
 	printf("current process %d\n", current_process);
 	process[current_process].cpu = m;
 	do {
 		current_process = (current_process + 1) % MAX_PROCESS;
+		if(process[current_process].state == SLEEPING && process[current_process].dateReveil <= time(NULL))
+			process[current_process].state = READY;
+		if(process[current_process].state == GETCHAR && tampon != '\0'){
+			process[current_process].state = READY;
+			process[current_process].cpu.DR[process[current_process].cpu.RI.i] = tampon;
+			tampon = '\0';
+		}
 	} while (process[current_process].state != READY);
 
 	CC = 0;
@@ -367,12 +399,23 @@ int dupProcessus(PSW m){
 	return -1;
 }
 
+void endortProcessus(PSW m){
+
+	process[current_process].state = SLEEPING;
+	process[current_process].dateReveil = time(NULL) + m.DR[m.RI.i];
+
+}
+
+void getcharre(PSW m){
+	process[current_process].state = GETCHAR;
+}
 
 /**********************************************************
 ** Simulation du systeme (mode systeme)
 ***********************************************************/
 
 PSW systeme(PSW m) {
+
 	switch (m.IN) {
 		case INT_INIT:
 			printf("%s\n", "INT_INIT");
@@ -405,6 +448,13 @@ PSW systeme(PSW m) {
 			if(dupProcessus(m)<0)
 				printf("%s\n", "error plus de place");
 			m = switchProcess(m);
+			break;
+		case INT_SLEEP:
+			endortProcessus(m);
+			m = switchProcess(m);
+			break;
+		case INT_GETCHAR:
+			getcharre(m);
 			break;
 	}
 	return m;
