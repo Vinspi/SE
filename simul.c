@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
+#include "bor-util.h"
 
 
 
@@ -25,7 +25,7 @@ typedef struct {
 int CC = 0;
 typedef int WORD;  /* un mot est un entier 32 bits  */
 char tampon = '\0';
-
+int current_time = 0;
 WORD mem[128];     /* memoire                       */
 
 
@@ -145,7 +145,7 @@ PSW cpu_CMP(PSW m) {
 
 /* instruction de branchement */
 PSW cpu_IFGT(PSW m){
-	if(m.AC > 0) m.PC = m.SB+m.RI.ARG;
+	if(m.AC > 0) m.PC = m.RI.ARG;
 	else m.PC++;
 	return m;
 }
@@ -223,7 +223,6 @@ PSW cpu_STORE(PSW m){
 /* Simulation de la CPU */
 PSW cpu(PSW m) {
 
-	printf("pc : %d\n",m.PC);
 	//printf("CC = %d\n", CC);
 	union { WORD word; INST in; } inst;
 
@@ -301,30 +300,59 @@ PSW systeme_init(void) {
 	//make_inst(2, INST_ADD, 0, 2, 200);   /* R0 += R2+200 */
 	//make_inst(3, INST_ADD, 0, 1, 100);   /* R0 += R1+100 */
 
-	/*
+
+	/* test of multi threading */
+
 	make_inst(0,INST_SUB,1,1,0);
 	make_inst(1,INST_SUB,3,3,-1);
 	make_inst(2,INST_SUB,2,2,-10);
 	make_inst(3,INST_SYSC,1,1,SYSC_NEW_THREAD);
-	make_inst(4,INST_IFGT,0,0,10);
-	make_inst(5,INST_ADD,1,3,0);  code du fils
+	make_inst(4,INST_IFGT,0,0,9);
+	make_inst(5,INST_ADD,1,3,0);
 	make_inst(6,INST_STORE,1,0,1);
-	make_inst(7,INST_CMP,2,1,0);
-	make_inst(8,INST_IFGT,1,2,5);
-	make_inst(9,INST_HALT,1,1,0);
+	make_inst(7,INST_SYSC,3,1,SYSC_SLEEP);
+	make_inst(8,INST_JUMP,0,0,5);
 
-	make_inst(10,INST_LOAD,1,0,1);
-	make_inst(11,INST_SYSC,1,2,SYSC_PUTI);  code du pere
-	make_inst(12,INST_JUMP,1,1,10);
+	make_inst(9,INST_LOAD,1,0,1);
+	make_inst(10,INST_SYSC,1,2,SYSC_PUTI);
+	make_inst(11,INST_SYSC,3,0,SYSC_SLEEP);
+	make_inst(12,INST_JUMP,0,0,9);
 
+
+
+
+	/* test of getChar syscall */
+	/*
+	make_inst(0,INST_NOP,0,0,8);
+	make_inst(1,INST_NOP,0,0,8);
+	make_inst(2,INST_SUB,1,1,0);
+	make_inst(3,INST_SUB,2,2,-1);
+	make_inst(4,INST_SYSC,1,1,SYSC_GETCHAR);
+	make_inst(5,INST_SYSC,1,1,SYSC_PUTI);
+	make_inst(6,INST_NOP,2,1,0);
+	make_inst(7,INST_JUMP,1,1,2);
 	*/
 
+
+	/* fibonnacci to 10*/
+	/*
 	make_inst(0,INST_SUB,1,1,0);
 	make_inst(1,INST_SUB,2,2,-1);
-	make_inst(2,INST_SYSC,1,1,SYSC_GETCHAR);
-	make_inst(3,INST_SYSC,1,1,SYSC_PUTI);
-	make_inst(4,INST_SYSC,2,1,SYSC_SLEEP);
-	make_inst(5,INST_JUMP,1,1,2);
+	make_inst(2,INST_SUB,3,3,-10);
+	make_inst(3,INST_SUB,4,4,0);
+	make_inst(4,INST_SUB,5,5,-1);
+	make_inst(5,INST_STORE,2,0,1);
+	make_inst(6,INST_ADD,2,1,0);
+	make_inst(7,INST_SYSC,4,4,SYSC_PUTI);
+	make_inst(8,INST_SYSC,2,0,SYSC_PUTI);
+	make_inst(9,INST_LOAD,1,0,1);
+	make_inst(10,INST_ADD,4,5,0);
+	make_inst(11,INST_CMP,4,3,0);
+	make_inst(12,INST_IFGT,4,4,14);
+	make_inst(13,INST_JUMP,0,0,5);
+	make_inst(14,INST_HALT,0,0,0);
+	*/
+
 
 
 
@@ -354,13 +382,13 @@ void afficher_1er_RI(PSW m){
 
 
 PSW switchProcess(PSW m){
-	printf("current process %d\n", current_process);
+
 	process[current_process].cpu = m;
 	do {
 		current_process = (current_process + 1) % MAX_PROCESS;
 		if(process[current_process].state == SLEEPING && process[current_process].dateReveil <= time(NULL))
 			process[current_process].state = READY;
-		if(process[current_process].state == GETCHAR && tampon != '\0'){
+		else if(process[current_process].state == GETCHAR && tampon != '\0'){
 			process[current_process].state = READY;
 			process[current_process].cpu.DR[process[current_process].cpu.RI.i] = tampon;
 			tampon = '\0';
@@ -415,51 +443,54 @@ void getcharre(PSW m){
 ***********************************************************/
 
 PSW systeme(PSW m) {
-
+	//printf("%s\n", "coucou");
 	switch (m.IN) {
 		case INT_INIT:
-			printf("%s\n", "INT_INIT");
+			printf("%s\n", "INT_INIT\n");
 			return (systeme_init());
 		case INT_SEGV:
-		  printf("%s\n", "INT_SEGV");
-			exit(1);
+		  printf("%s\n", "INT_SEGV\n");
+			process[current_process].state = EMPTY;
 			break;
 		case INT_TRACE:
-		  printf("%s\n", "INT_TRACE");
+		  printf("%s\n", "INT_TRACE\n");
 			printf("%s %d\n", "PC :",m.PC);
 			affiche_DR(m);
 			break;
 		case INT_INST:
-			printf("%s\n", "INT_INST");
-			exit(1);
+			printf("%s\n", "INT_INST\n");
+			process[current_process].state = EMPTY;
 			break;
 		case INT_CLOCK:
-			printf("%s\n", "INT_CLOCK");
-			m = switchProcess(m);
+			printf("%s\n", "INT_CLOCK\n");
 			break;
 		case INT_EXIT:
-			printf("%s\n", "INT_EXIT");
-			exit(0);
+			printf("%s\n", "INT_EXIT\n");
+			process[current_process].state = EMPTY;
+			break;
 		case INT_PUTI:
 			afficher_1er_RI(m);
-			m = switchProcess(m);
 			break;
 		case INT_NEW_THREAD:
 			if(dupProcessus(m)<0)
 				printf("%s\n", "error plus de place");
-			m = switchProcess(m);
 			break;
 		case INT_SLEEP:
 			endortProcessus(m);
-			m = switchProcess(m);
 			break;
 		case INT_GETCHAR:
 			getcharre(m);
 			break;
 	}
+	m = switchProcess(m);
 	return m;
 }
 
+void handler(int signal){
+		tampon = 'a';
+		printf("alarm detectée\n");
+		alarm(3);
+}
 
 /**********************************************************
 ** fonction principale
@@ -468,6 +499,9 @@ PSW systeme(PSW m) {
 
 int main(void) {
 	PSW mep;
+
+	bor_signal(SIGALRM,handler,0);
+	alarm(3);
 
 	mep.IN = INT_INIT; /* interruption INIT */
 	while (1) {
