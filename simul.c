@@ -24,10 +24,14 @@ typedef struct {
 ***********************************************************/
 int CC = 0;
 typedef int WORD;  /* un mot est un entier 32 bits  */
-char tampon = '\0';
-int current_time = 0;
 WORD mem[128];     /* memoire                       */
 
+char tampon = '\0';
+char charToAdd = '\0';
+
+int nbInstructions = 0;
+
+int current_time = 0;
 
 /**********************************************************
 ** Codes associes aux syscall
@@ -195,7 +199,7 @@ PSW cpu_LOAD(PSW m){
 	m.AC = m.DR[m.RI.j] + m.RI.ARG;
 
 	if(m.AC < 0 || m.AC >= m.SS){
-		printf("%s\n", "ereur d'adressage");
+		printf("%s\n", "Erreur d'adressage");
 		exit(1);
 	}
 	m.AC = mem[m.SB+m.AC];
@@ -210,7 +214,7 @@ PSW cpu_STORE(PSW m){
 	m.AC = m.DR[m.RI.j] + m.RI.ARG;
 
 	if(m.AC < 0 || m.AC >= m.SS){
-		printf("%s\n", "ereur d'adressage");
+		printf("%s\n", "Erreur d'adressage");
 		exit(1);
 	}
 
@@ -278,9 +282,65 @@ PSW cpu(PSW m) {
 		return (m);
 	}
 
-
-
 	return m;
+}
+
+
+/**********************************************************
+** Fonctions de test a appeler dans "systeme_init()"
+***********************************************************/
+
+void test_increment_and_display(){
+		make_inst(0,INST_SUB,1,1,0);
+		make_inst(1,INST_SUB,3,3,-1);
+		make_inst(2,INST_SUB,2,2,-10);
+		make_inst(3,INST_SYSC,1,1,SYSC_NEW_THREAD);
+		make_inst(4,INST_IFGT,0,0,9);
+		make_inst(5,INST_ADD,1,3,0);
+		make_inst(6,INST_STORE,1,0,1);
+		make_inst(7,INST_SYSC,3,1,SYSC_SLEEP);
+		make_inst(8,INST_JUMP,0,0,5);
+
+		make_inst(9,INST_LOAD,1,0,1);
+		make_inst(10,INST_SYSC,1,2,SYSC_PUTI);
+		make_inst(11,INST_SYSC,3,0,SYSC_SLEEP);
+		make_inst(12,INST_JUMP,0,0,9);
+
+		nbInstructions = 13;
+}
+
+
+void test_read_and_print_char_from_buffer(char charToRead){
+		charToAdd = charToRead;
+
+		make_inst(0,INST_SUB,1,1,0);
+		make_inst(1,INST_SUB,2,2,-1);
+		make_inst(2,INST_SYSC,1,1,SYSC_GETCHAR);
+		make_inst(3,INST_SYSC,1,1,SYSC_PUTI);
+		make_inst(4,INST_NOP,2,1,0);
+		make_inst(5,INST_JUMP,1,1,2);
+
+		nbInstructions = 6;
+}
+
+void test_fibonacci_to_ten(){
+		make_inst(0,INST_SUB,1,1,0);
+		make_inst(1,INST_SUB,2,2,-1);
+		make_inst(2,INST_SUB,3,3,-10);
+		make_inst(3,INST_SUB,4,4,0);
+		make_inst(4,INST_SUB,5,5,-1);
+		make_inst(5,INST_STORE,2,0,1);
+		make_inst(6,INST_ADD,2,1,0);
+		make_inst(7,INST_SYSC,4,4,SYSC_PUTI);
+		make_inst(8,INST_SYSC,2,0,SYSC_PUTI);
+		make_inst(9,INST_LOAD,1,0,1);
+		make_inst(10,INST_ADD,4,5,0);
+		make_inst(11,INST_CMP,4,3,0);
+		make_inst(12,INST_IFGT,4,4,14);
+		make_inst(13,INST_JUMP,0,0,5);
+		make_inst(14,INST_HALT,0,0,0);
+
+		nbInstructions = 15;
 }
 
 
@@ -293,75 +353,19 @@ PSW systeme_init(void) {
 
 
 	printf("Booting.\n");
-	/*** creation d'un programme ***/
 
-	//make_inst(0, INST_SUB, 2, 2, -1000); /* R2 -= R2-1000 */
-	//make_inst(1, INST_ADD, 1, 2, 500);   /* R1 += R2+500 */
-	//make_inst(2, INST_ADD, 0, 2, 200);   /* R0 += R2+200 */
-	//make_inst(3, INST_ADD, 0, 1, 100);   /* R0 += R1+100 */
+	//test_increment_and_display();
 
+	test_read_and_print_char_from_buffer('a');
 
-	/* test of multi threading */
-
-	make_inst(0,INST_SUB,1,1,0);
-	make_inst(1,INST_SUB,3,3,-1);
-	make_inst(2,INST_SUB,2,2,-10);
-	make_inst(3,INST_SYSC,1,1,SYSC_NEW_THREAD);
-	make_inst(4,INST_IFGT,0,0,9);
-	make_inst(5,INST_ADD,1,3,0);
-	make_inst(6,INST_STORE,1,0,1);
-	make_inst(7,INST_SYSC,3,1,SYSC_SLEEP);
-	make_inst(8,INST_JUMP,0,0,5);
-
-	make_inst(9,INST_LOAD,1,0,1);
-	make_inst(10,INST_SYSC,1,2,SYSC_PUTI);
-	make_inst(11,INST_SYSC,3,0,SYSC_SLEEP);
-	make_inst(12,INST_JUMP,0,0,9);
-
-
-
-
-	/* test of getChar syscall */
-	/*
-	make_inst(0,INST_NOP,0,0,8);
-	make_inst(1,INST_NOP,0,0,8);
-	make_inst(2,INST_SUB,1,1,0);
-	make_inst(3,INST_SUB,2,2,-1);
-	make_inst(4,INST_SYSC,1,1,SYSC_GETCHAR);
-	make_inst(5,INST_SYSC,1,1,SYSC_PUTI);
-	make_inst(6,INST_NOP,2,1,0);
-	make_inst(7,INST_JUMP,1,1,2);
-	*/
-
-
-	/* fibonnacci to 10*/
-	/*
-	make_inst(0,INST_SUB,1,1,0);
-	make_inst(1,INST_SUB,2,2,-1);
-	make_inst(2,INST_SUB,3,3,-10);
-	make_inst(3,INST_SUB,4,4,0);
-	make_inst(4,INST_SUB,5,5,-1);
-	make_inst(5,INST_STORE,2,0,1);
-	make_inst(6,INST_ADD,2,1,0);
-	make_inst(7,INST_SYSC,4,4,SYSC_PUTI);
-	make_inst(8,INST_SYSC,2,0,SYSC_PUTI);
-	make_inst(9,INST_LOAD,1,0,1);
-	make_inst(10,INST_ADD,4,5,0);
-	make_inst(11,INST_CMP,4,3,0);
-	make_inst(12,INST_IFGT,4,4,14);
-	make_inst(13,INST_JUMP,0,0,5);
-	make_inst(14,INST_HALT,0,0,0);
-
-*/
-
-
+	//test_fibonacci_to_ten();
 
 
 	/*** valeur initiale du PSW ***/
 	memset (&cpu, 0, sizeof(cpu));
 	cpu.PC = 0;
 	cpu.SB = 0;
-	cpu.SS = 13;
+	cpu.SS = nbInstructions;
 
 	process[0].cpu = cpu;
 	process[0].state = READY;
@@ -370,11 +374,11 @@ PSW systeme_init(void) {
 }
 
 void affiche_DR(PSW m){
-		printf("%s ", "DR : ");
+		printf("\n------------------\n");
 		for(int i=0;i<8;i++){
-			printf("[%d] ", m.DR[i]);
+			printf("DR[%d] : %d\n", i, m.DR[i]);
 		}
-		printf("\n");
+		printf("------------------\n\n");
 }
 
 void afficher_1er_RI(PSW m){
@@ -422,8 +426,8 @@ int dupProcessus(PSW m){
 		if(process[i].state == EMPTY){
 				process[i].cpu = newProcess;
 				process[i].state = READY;
-				m.AC = i;
-				m.DR[m.RI.i] = i;
+                m.AC = i;
+                m.DR[m.RI.i] = i;
 				return 0;
 		}
 	}
@@ -476,7 +480,7 @@ PSW systeme(PSW m) {
 			break;
 		case INT_NEW_THREAD:
 			if(dupProcessus(m)<0)
-				printf("%s\n", "error plus de place");
+				printf("%s\n", "Erreur, plus de place");
 			break;
 		case INT_SLEEP:
 			endortProcessus(m);
@@ -490,8 +494,11 @@ PSW systeme(PSW m) {
 }
 
 void handler(int signal){
-		tampon = 'a';
-		printf("alarm detectée\n");
+	  tampon = charToAdd;
+		if(tampon != '\0')
+			printf("\nAlarm detectée (Ecriture de '%c' dans tampon)\n\n", tampon);
+		else
+			printf("\nAlarm detectée\n\n");
 		alarm(3);
 }
 
