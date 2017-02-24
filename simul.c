@@ -351,7 +351,8 @@ PSW systeme_init(void) {
 	make_inst(12,INST_IFGT,4,4,14);
 	make_inst(13,INST_JUMP,0,0,5);
 	make_inst(14,INST_HALT,0,0,0);
-	*/
+
+*/
 
 
 
@@ -421,6 +422,8 @@ int dupProcessus(PSW m){
 		if(process[i].state == EMPTY){
 				process[i].cpu = newProcess;
 				process[i].state = READY;
+				m.AC = i;
+				m.DR[m.RI.i] = i;
 				return 0;
 		}
 	}
